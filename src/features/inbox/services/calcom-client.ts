@@ -188,3 +188,67 @@ export async function getSlots(
     return null;
   }
 }
+
+export interface CalBooking {
+  uid: string;
+  start: string;
+  end: string | null;
+  status: string;
+}
+
+interface BookingResponse {
+  data?: { uid?: string; start?: string; end?: string; status?: string };
+}
+
+function normalizeBooking(json: BookingResponse): CalBooking | null {
+  const d = json.data;
+  if (!d?.uid || !d.start) return null;
+  return {
+    uid: d.uid,
+    start: d.start,
+    end: d.end ?? null,
+    status: d.status ?? "accepted",
+  };
+}
+
+export async function createBooking(
+  cfg: CalComConfig,
+  args: {
+    eventTypeId: number;
+    startISO: string;
+    attendee: { name: string; email: string };
+    timeZone: string;
+  },
+): Promise<CalBooking | null> {
+  const body = {
+    eventTypeId: args.eventTypeId,
+    start: args.startISO,
+    attendee: {
+      name: args.attendee.name,
+      email: args.attendee.email,
+      timeZone: args.timeZone,
+      language: "es",
+    },
+    metadata: {},
+  };
+
+  try {
+    const res = await fetch(`${cfg.baseUrl}/v2/bookings`, {
+      method: "POST",
+      headers: headers(cfg, CAL_VERSION_BOOKINGS),
+      body: JSON.stringify(body),
+    });
+    if (!res.ok) {
+      console.error(
+        "[calcom] createBooking failed:",
+        res.status,
+        (await res.text()).slice(0, 200),
+      );
+      return null;
+    }
+    return normalizeBooking((await res.json()) as BookingResponse);
+  } catch (err) {
+    console.error("[calcom] createBooking error:", err);
+    return null;
+  }
+}

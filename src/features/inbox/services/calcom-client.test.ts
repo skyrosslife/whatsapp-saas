@@ -158,3 +158,81 @@ describe("getSlots", () => {
     expect(slots).toHaveLength(20);
   });
 });
+
+import { createBooking } from "./calcom-client";
+
+describe("createBooking", () => {
+  const cfg = {
+    apiKey: "cal_live_x",
+    baseUrl: "https://api.cal.com",
+    defaultEventTypeId: 123,
+    timezone: "America/Mexico_City",
+    eventTypes: {},
+  };
+
+  it("posts the v2 attendee shape and returns the normalized booking", async () => {
+    const fetchMock = vi.fn(async () => ({
+      ok: true,
+      status: 200,
+      json: async () => ({
+        status: "success",
+        data: {
+          uid: "bk_123",
+          start: "2050-09-05T15:00:00Z",
+          end: "2050-09-05T16:00:00Z",
+          status: "accepted",
+        },
+      }),
+    }));
+    vi.stubGlobal("fetch", fetchMock);
+
+    const booking = await createBooking(cfg, {
+      eventTypeId: 123,
+      startISO: "2050-09-05T15:00:00Z",
+      attendee: { name: "Ana", email: "ana@example.com" },
+      timeZone: "America/Mexico_City",
+    });
+
+    expect(booking).toEqual({
+      uid: "bk_123",
+      start: "2050-09-05T15:00:00Z",
+      end: "2050-09-05T16:00:00Z",
+      status: "accepted",
+    });
+    const [url, opts] = fetchMock.mock.calls[0];
+    expect(url).toBe("https://api.cal.com/v2/bookings");
+    expect(opts.method).toBe("POST");
+    expect((opts.headers as Record<string, string>)["cal-api-version"]).toBe(
+      "2024-08-13",
+    );
+    expect(JSON.parse(opts.body as string)).toEqual({
+      eventTypeId: 123,
+      start: "2050-09-05T15:00:00Z",
+      attendee: {
+        name: "Ana",
+        email: "ana@example.com",
+        timeZone: "America/Mexico_City",
+        language: "es",
+      },
+      metadata: {},
+    });
+  });
+
+  it("returns null on a non-ok response", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => ({
+        ok: false,
+        status: 422,
+        text: async () => "no availability",
+      })),
+    );
+    const booking = await createBooking(cfg, {
+      eventTypeId: 1,
+      startISO: "x",
+      attendee: { name: "A", email: "a@a.com" },
+      timeZone: "UTC",
+    });
+    expect(booking).toBeNull();
+  });
+});
