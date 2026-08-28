@@ -20,7 +20,7 @@ import { ModelPicker } from "@/features/agents/components/model-picker";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
-type Provider = "ycloud" | "openrouter" | "highlevel";
+type Provider = "ycloud" | "openrouter" | "highlevel" | "caldotcom";
 
 type IntegrationData = {
   provider: Provider;
@@ -352,9 +352,9 @@ function YCloudSection({
             aria-label="Mensaje de aviso al contacto"
           />
           <p className="text-xs text-muted-foreground">
-            Se envía en cuanto la conversación queda en espera de un asesor, para
-            que el contacto no se quede sin respuesta. Si lo dejas vacío se usa:
-            “{DEFAULT_HANDOFF_ACK}”
+            Se envía en cuanto la conversación queda en espera de un asesor,
+            para que el contacto no se quede sin respuesta. Si lo dejas vacío se
+            usa: “{DEFAULT_HANDOFF_ACK}”
           </p>
         </div>
 
@@ -819,6 +819,207 @@ function HighLevelSection({
   );
 }
 
+// ─── Cal.com section ──────────────────────────────────────────────────────────
+
+function CalDotComSection({
+  workspaceId,
+  initial,
+  onSaved,
+}: {
+  workspaceId: string;
+  initial: IntegrationData | undefined;
+  onSaved: () => void;
+}) {
+  const [apiKey, setApiKey] = useState(
+    initial?.credentials?.calcom_api_key ?? "",
+  );
+  const [baseUrl, setBaseUrl] = useState(
+    (initial?.config?.base_url as string | undefined) ?? "https://api.cal.com",
+  );
+  const [eventTypeId, setEventTypeId] = useState<string>(
+    initial?.config?.default_event_type_id != null
+      ? String(initial.config.default_event_type_id)
+      : "",
+  );
+  const [timezone, setTimezone] = useState(
+    (initial?.config?.timezone as string | undefined) ?? "",
+  );
+  const [eventTypesJson, setEventTypesJson] = useState(
+    initial?.config?.event_types
+      ? JSON.stringify(initial.config.event_types, null, 2)
+      : "",
+  );
+  const [saving, setSaving] = useState(false);
+  const [testing, setTesting] = useState(false);
+
+  async function handleTest() {
+    setTesting(true);
+    try {
+      const res = await fetch(
+        `/api/workspace/${workspaceId}/integrations/calcom/test`,
+        { method: "POST" },
+      );
+      const json = (await res.json()) as {
+        ok: boolean;
+        error?: string;
+        account?: string;
+      };
+      if (json.ok) toast.success(`Cal.com conectado — ${json.account}`);
+      else toast.error(json.error ?? "Error al probar la conexión");
+    } catch {
+      toast.error("Error de red al probar la conexión");
+    } finally {
+      setTesting(false);
+    }
+  }
+
+  async function handleSave() {
+    let eventTypes: Record<string, number> | undefined;
+    if (eventTypesJson.trim()) {
+      try {
+        eventTypes = JSON.parse(eventTypesJson) as Record<string, number>;
+      } catch {
+        toast.error("El JSON de tipos de cita no es válido");
+        return;
+      }
+    }
+    setSaving(true);
+    try {
+      const res = await fetch(`/api/workspace/${workspaceId}/integrations`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          provider: "caldotcom",
+          credentials: { calcom_api_key: apiKey },
+          config: {
+            base_url: baseUrl.trim() || "https://api.cal.com",
+            default_event_type_id: eventTypeId ? Number(eventTypeId) : null,
+            timezone: timezone.trim(),
+            ...(eventTypes ? { event_types: eventTypes } : {}),
+          },
+        }),
+      });
+      const json = (await res.json()) as { ok?: boolean; error?: string };
+      if (json.ok) {
+        toast.success("Configuración de Cal.com guardada");
+        onSaved();
+      } else {
+        toast.error(json.error ?? "Error al guardar");
+      }
+    } catch {
+      toast.error("Error de red al guardar");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  return (
+    <Section
+      title="Cal.com"
+      description="Agenda, reprograma y cancela citas desde WhatsApp con Cal.com (cloud o self-hosted)."
+    >
+      <div className="grid gap-4">
+        <div className="space-y-2">
+          <Label htmlFor="calcom-api-key">API Key</Label>
+          <Input
+            id="calcom-api-key"
+            type="password"
+            placeholder="cal_live_..."
+            value={apiKey}
+            onChange={(e) => setApiKey(e.target.value)}
+            autoComplete="off"
+          />
+        </div>
+
+        <div className="space-y-2">
+          <Label htmlFor="calcom-base-url">Base URL de la API</Label>
+          <Input
+            id="calcom-base-url"
+            type="url"
+            placeholder="https://api.cal.com"
+            value={baseUrl}
+            onChange={(e) => setBaseUrl(e.target.value)}
+          />
+          <p className="text-xs text-muted-foreground">
+            Déjalo en <code>https://api.cal.com</code> para Cal.com Cloud, o pon
+            la URL de tu instancia self-hosted.
+          </p>
+        </div>
+
+        <div className="space-y-2">
+          <Label htmlFor="calcom-event-type">Event Type ID por defecto</Label>
+          <Input
+            id="calcom-event-type"
+            type="number"
+            placeholder="123"
+            value={eventTypeId}
+            onChange={(e) => setEventTypeId(e.target.value)}
+          />
+        </div>
+
+        <div className="space-y-2">
+          <Label htmlFor="calcom-timezone">Zona horaria (opcional)</Label>
+          <Input
+            id="calcom-timezone"
+            placeholder="America/Mexico_City"
+            value={timezone}
+            onChange={(e) => setTimezone(e.target.value)}
+          />
+          <p className="text-xs text-muted-foreground">
+            Si la dejas vacía se usa la zona horaria del negocio.
+          </p>
+        </div>
+
+        <div className="space-y-2">
+          <Label htmlFor="calcom-event-types">
+            Tipos de cita con nombre (opcional, JSON)
+          </Label>
+          <Textarea
+            id="calcom-event-types"
+            rows={3}
+            placeholder={'{ "consulta": 123, "limpieza": 456 }'}
+            value={eventTypesJson}
+            onChange={(e) => setEventTypesJson(e.target.value)}
+            className="font-mono text-xs"
+          />
+          <p className="text-xs text-muted-foreground">
+            Deja que el agente elija el tipo por nombre. Si lo omites, siempre
+            usa el Event Type ID por defecto.
+          </p>
+        </div>
+
+        <div className="flex items-center gap-2 pt-2">
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            onClick={handleTest}
+            disabled={testing}
+            aria-busy={testing}
+          >
+            {testing && (
+              <Loader2 className="h-4 w-4 mr-2 animate-spin" aria-hidden />
+            )}
+            Probar conexión
+          </Button>
+          <Button
+            type="button"
+            size="sm"
+            onClick={handleSave}
+            disabled={saving}
+            aria-busy={saving}
+          >
+            {saving && (
+              <Loader2 className="h-4 w-4 mr-2 animate-spin" aria-hidden />
+            )}
+            Guardar
+          </Button>
+        </div>
+      </div>
+    </Section>
+  );
+}
+
 // ─── Main component ───────────────────────────────────────────────────────────
 
 interface Props {
@@ -844,6 +1045,7 @@ export function IntegrationsTab({ workspaceId, initialIntegrations }: Props) {
   const ycloud = findIntegration(integrations, "ycloud");
   const openrouter = findIntegration(integrations, "openrouter");
   const highlevel = findIntegration(integrations, "highlevel");
+  const calcom = findIntegration(integrations, "caldotcom");
 
   return (
     <div className="space-y-6">
@@ -862,6 +1064,12 @@ export function IntegrationsTab({ workspaceId, initialIntegrations }: Props) {
       <HighLevelSection
         workspaceId={workspaceId}
         initial={highlevel}
+        onSaved={refresh}
+      />
+      <Separator />
+      <CalDotComSection
+        workspaceId={workspaceId}
+        initial={calcom}
         onSaved={refresh}
       />
     </div>

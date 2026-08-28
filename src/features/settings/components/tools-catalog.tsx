@@ -40,6 +40,10 @@ const TOOL_ICONS: Record<string, React.ElementType> = {
   check_availability: CalendarSearch,
   custom_webhook: Webhook,
   echo: FlaskConical,
+  calcom_check_availability: CalendarSearch,
+  calcom_book: CalendarPlus,
+  calcom_reschedule: CalendarClock,
+  calcom_cancel: CalendarClock,
 };
 
 // Escalating treatment: read (blue) → write (amber) → sensitive (orange + lock).
