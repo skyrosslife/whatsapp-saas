@@ -36,20 +36,24 @@ Supabase/Vercel.
 - **Motor de agente** con state machine + handoff humano, prompting personalizable
   y tools activables (incluye modo setter y agendamiento).
 - **CRM** con sincronización opcional a HighLevel (por workspace).
+- **Agendamiento**: HighLevel **o Cal.com** por workspace — el agente consulta
+  disponibilidad, agenda, reprograma y cancela citas desde el chat.
 - **Knowledge Base** con búsqueda semántica (pgvector).
 - **Templates** y manejo de la ventana de 24h de Meta.
 - **Multi-tenant** con roles, RLS por workspace y super admin.
 
 ## Stack
 
-| Capa      | Tecnología                                   |
-| --------- | -------------------------------------------- |
-| Framework | Next.js 16 + React 19 + TypeScript           |
-| Estilos   | Tailwind CSS + shadcn/ui                     |
-| Backend   | Supabase (Auth + PostgreSQL + RLS + Storage) |
-| IA        | OpenRouter (LLM gateway)                     |
-| WhatsApp  | YCloud (ver abajo)                           |
-| Hosting   | Vercel                                       |
+| Capa       | Tecnología                                   |
+| ---------- | -------------------------------------------- |
+| Framework  | Next.js 16 + React 19 + TypeScript           |
+| Estilos    | Tailwind CSS + shadcn/ui                     |
+| Backend    | Supabase (Auth + PostgreSQL + RLS + Storage) |
+| IA         | OpenRouter (LLM gateway)                     |
+| WhatsApp   | YCloud (ver abajo)                           |
+| Calendario | HighLevel o Cal.com (por workspace)          |
+| Hosting    | Vercel                                       |
+| Tests      | Vitest (unit) + Playwright (e2e)             |
 
 ## Elegir proveedor de WhatsApp
 
@@ -57,10 +61,10 @@ El proveedor no es intercambiable por configuración: su API define la forma de 
 envíos, el payload de los webhooks y el esquema de firma. Por eso vive en una
 rama, no en una variable de entorno.
 
-| Rama | Proveedor | Cuándo usarla |
-| --- | --- | --- |
-| `main` | **YCloud** | Por defecto |
-| `provider/kapso` | **Kapso** | **Obligatoria en Estados Unidos** — YCloud no opera ahí |
+| Rama             | Proveedor  | Cuándo usarla                                           |
+| ---------------- | ---------- | ------------------------------------------------------- |
+| `main`           | **YCloud** | Por defecto                                             |
+| `provider/kapso` | **Kapso**  | **Obligatoria en Estados Unidos** — YCloud no opera ahí |
 
 ```bash
 # YCloud (por defecto)
@@ -72,14 +76,14 @@ git clone -b provider/kapso https://github.com/Carlos-Dominguez-faber/whatsapp-s
 
 ### En qué se diferencian
 
-| | YCloud (`main`) | Kapso (`provider/kapso`) |
-| --- | --- | --- |
-| Disponible en EE.UU. | ❌ | ✅ |
-| Identidad del emisor | `phone_number` (E.164) | `phone_number_id` de Meta |
-| Firma del webhook | con timestamp, ventana anti-replay de 300 s | HMAC-SHA256 sin timestamp |
-| Nombre del evento | en el body | en el header `X-Webhook-Event` |
-| Coexistence | no soportado | soportado |
-| Prueba de conexión | `GET /balance` | listado de números del proyecto |
+|                      | YCloud (`main`)                             | Kapso (`provider/kapso`)        |
+| -------------------- | ------------------------------------------- | ------------------------------- |
+| Disponible en EE.UU. | ❌                                          | ✅                              |
+| Identidad del emisor | `phone_number` (E.164)                      | `phone_number_id` de Meta       |
+| Firma del webhook    | con timestamp, ventana anti-replay de 300 s | HMAC-SHA256 sin timestamp       |
+| Nombre del evento    | en el body                                  | en el header `X-Webhook-Event`  |
+| Coexistence          | no soportado                                | soportado                       |
+| Prueba de conexión   | `GET /balance`                              | listado de números del proyecto |
 
 La rama de Kapso pide **dos IDs de Meta** que YCloud no necesita —`phone_number_id`
 y `waba_id`— y ambos se autocompletan al pulsar «Probar conexión» en
@@ -100,7 +104,8 @@ cp .env.local.example .env.local   # llena tus keys (o usa: node scripts/setup.m
 npm run dev                        # http://localhost:3000
 ```
 
-Otros comandos: `npm run build`, `npm run lint`, `npm run typecheck`.
+Otros comandos: `npm run build`, `npm run lint`, `npm run typecheck`,
+`npm run test:run` (Vitest — unit), `npm run test:e2e` (Playwright).
 
 ## El cron del buffer
 
@@ -129,13 +134,14 @@ scripts/
 
 Ver [`.env.local.example`](.env.local.example). Las de Supabase y OpenRouter las
 pegas tú; `ENCRYPTION_KEY`, `BUFFER_PROCESS_SECRET` y `CRON_SECRET` las **genera**
-`scripts/setup.mjs`. **YCloud y HighLevel NO son env vars** — se configuran por
-workspace en Settings → Integraciones.
+`scripts/setup.mjs`. **YCloud, HighLevel y Cal.com NO son env vars** — se
+configuran por workspace en Settings → Integraciones.
 
 ### Credenciales de integraciones
 
 Lo que guardas en Settings → Integraciones (API key de YCloud, signing secret,
-PIT de HighLevel) se cifra con **AES-256-GCM** antes de tocar la base. La llave
+PIT de HighLevel, API key de Cal.com) se cifra con **AES-256-GCM** antes de tocar
+la base. La llave
 es `ENCRYPTION_KEY` y vive solo en el entorno del servidor: quien tenga acceso
 de lectura a Postgres ve ciphertext, no las keys.
 
