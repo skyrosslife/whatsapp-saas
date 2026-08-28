@@ -14,6 +14,20 @@
 
 ---
 
+## Implementation deviations (discovered during execution)
+
+1. **Vitest config file is `vitest.config.mts`** (not `.ts`) — the repo is CommonJS and `vite-tsconfig-paths` is ESM-only.
+2. **`appointments` table already existed** (foundation migration, dormant — no code uses it). Task 6 was rewritten to `ALTER TABLE appointments ADD COLUMN ...` instead of `CREATE TABLE`. Consequences for Tasks 7/9/10/11:
+   - start time column is **`scheduled_at`** (existing, `NOT NULL`), not `start_at`.
+   - raw payload column is **`meta`** (existing jsonb), not `raw`.
+   - `status` values must fit the existing CHECK `('booked','confirmed','cancelled','completed','no_show')`: use **`'booked'`** for a new/rescheduled booking (not `'accepted'`), `'cancelled'` for a cancel.
+   - RLS policies (`appointments_select` / `appointments_write`) and the `updated_at` trigger already exist — the migration does not re-create them.
+   - Added columns: `provider` (default `'caldotcom'`), `external_uid`, `event_type_id`, `end_at`, `attendee_email`, `attendee_name`, `reschedule_reason`, `cancel_reason`; partial unique index `uq_appointments_provider_uid` on `(workspace_id, provider, external_uid) WHERE external_uid IS NOT NULL`.
+
+   Task 6 is **already applied** to the remote DB (commit `1d05c09`). Tasks 7/9/10/11 code and tests below must use `scheduled_at` / `meta` / `'booked'` in place of `start_at` / `raw` / `'accepted'`.
+
+---
+
 ## File Structure
 
 **New files:**
