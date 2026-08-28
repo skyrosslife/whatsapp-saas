@@ -53,6 +53,18 @@ describe("getCalComConfig", () => {
     });
   });
 
+  it("returns null (does not throw) when credential decryption fails", async () => {
+    const secrets = await import("@/shared/lib/integration-secrets");
+    vi.mocked(secrets.decryptCredentials).mockRejectedValueOnce(
+      new Error("bad ENCRYPTION_KEY"),
+    );
+    sb.table("integrations").result = {
+      data: { credentials: { calcom_api_key: "enc:whatever" }, config: {} },
+      error: null,
+    };
+    await expect(getCalComConfig("ws1")).resolves.toBeNull();
+  });
+
   it("treats a null / empty / zero default_event_type_id as null", async () => {
     for (const bad of [null, "", 0, "0", undefined]) {
       sb.table("integrations").result = {

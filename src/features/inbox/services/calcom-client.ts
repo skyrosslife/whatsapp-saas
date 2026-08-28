@@ -67,11 +67,13 @@ export async function getCalComConfig(
 
   const row = data as IntegrationRow;
 
-  const creds = await decryptCredentials(
-    row.credentials,
-    workspaceId,
-    "caldotcom",
-  );
+  let creds: Record<string, unknown>;
+  try {
+    creds = await decryptCredentials(row.credentials, workspaceId, "caldotcom");
+  } catch (err) {
+    console.error("[calcom] getCalComConfig: credential decrypt failed:", err);
+    return null;
+  }
   const config = row.config ?? {};
 
   const apiKey = creds.calcom_api_key;
