@@ -126,3 +126,65 @@ export function resolveEventTypeId(
   if (name && cfg.eventTypes[name] != null) return cfg.eventTypes[name];
   return cfg.defaultEventTypeId;
 }
+
+// ──────────────────────────────────────────────────────────────────────────────
+// API v2 calls
+// ──────────────────────────────────────────────────────────────────────────────
+
+function headers(cfg: CalComConfig, version: string): HeadersInit {
+  return {
+    Authorization: `Bearer ${cfg.apiKey}`,
+    "cal-api-version": version,
+    "Content-Type": "application/json",
+  };
+}
+
+interface SlotsResponse {
+  data?: Record<string, unknown>;
+}
+
+export async function getSlots(
+  cfg: CalComConfig,
+  args: {
+    eventTypeId: number;
+    startISO: string;
+    endISO: string;
+    timeZone: string;
+  },
+): Promise<string[] | null> {
+  const params = new URLSearchParams({
+    eventTypeId: String(args.eventTypeId),
+    start: args.startISO,
+    end: args.endISO,
+    timeZone: args.timeZone,
+  });
+
+  try {
+    const res = await fetch(`${cfg.baseUrl}/v2/slots?${params.toString()}`, {
+      method: "GET",
+      headers: headers(cfg, CAL_VERSION_SLOTS),
+    });
+    if (!res.ok) {
+      console.error(
+        "[calcom] getSlots failed:",
+        res.status,
+        (await res.text()).slice(0, 200),
+      );
+      return null;
+    }
+    const json = (await res.json()) as SlotsResponse;
+    const out: string[] = [];
+    for (const value of Object.values(json.data ?? {})) {
+      if (Array.isArray(value)) {
+        for (const slot of value) {
+          const start = (slot as { start?: string }).start;
+          if (typeof start === "string") out.push(start);
+        }
+      }
+    }
+    return out.slice(0, 20);
+  } catch (err) {
+    console.error("[calcom] getSlots error:", err);
+    return null;
+  }
+}

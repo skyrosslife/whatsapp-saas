@@ -70,3 +70,91 @@ describe("getCalComConfig", () => {
     expect(cfg?.baseUrl).toBe("https://api.cal.com");
   });
 });
+
+import { getSlots } from "./calcom-client";
+
+describe("getSlots", () => {
+  const cfg = {
+    apiKey: "cal_live_x",
+    baseUrl: "https://api.cal.com",
+    defaultEventTypeId: 123,
+    timezone: "America/Mexico_City",
+    eventTypes: {},
+  };
+
+  it("sends the right url + version header and flattens slots", async () => {
+    const fetchMock = vi.fn(async () => ({
+      ok: true,
+      status: 200,
+      json: async () => ({
+        status: "success",
+        data: {
+          "2050-09-05": [
+            { start: "2050-09-05T09:00:00-06:00" },
+            { start: "2050-09-05T10:00:00-06:00" },
+          ],
+          "2050-09-06": [{ start: "2050-09-06T09:00:00-06:00" }],
+        },
+      }),
+    }));
+    vi.stubGlobal("fetch", fetchMock);
+
+    const slots = await getSlots(cfg, {
+      eventTypeId: 123,
+      startISO: "2050-09-05T00:00:00Z",
+      endISO: "2050-09-07T00:00:00Z",
+      timeZone: "America/Mexico_City",
+    });
+
+    expect(slots).toEqual([
+      "2050-09-05T09:00:00-06:00",
+      "2050-09-05T10:00:00-06:00",
+      "2050-09-06T09:00:00-06:00",
+    ]);
+    const [url, opts] = fetchMock.mock.calls[0];
+    expect(url).toContain("https://api.cal.com/v2/slots?");
+    expect(url).toContain("eventTypeId=123");
+    expect(url).toContain("timeZone=America%2FMexico_City");
+    expect((opts.headers as Record<string, string>)["cal-api-version"]).toBe(
+      "2024-09-04",
+    );
+    expect((opts.headers as Record<string, string>).Authorization).toBe(
+      "Bearer cal_live_x",
+    );
+  });
+
+  it("returns null on a non-ok response", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => ({ ok: false, status: 500, text: async () => "boom" })),
+    );
+    const slots = await getSlots(cfg, {
+      eventTypeId: 1,
+      startISO: "a",
+      endISO: "b",
+      timeZone: "UTC",
+    });
+    expect(slots).toBeNull();
+  });
+
+  it("caps at 20 slots", async () => {
+    const many = Array.from({ length: 40 }, (_, i) => ({
+      start: `2050-09-05T${String(i).padStart(2, "0")}:00:00Z`,
+    }));
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => ({
+        ok: true,
+        status: 200,
+        json: async () => ({ status: "success", data: { "2050-09-05": many } }),
+      })),
+    );
+    const slots = await getSlots(cfg, {
+      eventTypeId: 1,
+      startISO: "a",
+      endISO: "b",
+      timeZone: "UTC",
+    });
+    expect(slots).toHaveLength(20);
+  });
+});
