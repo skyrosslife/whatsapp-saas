@@ -83,7 +83,7 @@ describe("getSlots", () => {
   };
 
   it("sends the right url + version header and flattens slots", async () => {
-    const fetchMock = vi.fn(async () => ({
+    const fetchMock = vi.fn(async (_url: string, _opts: RequestInit) => ({
       ok: true,
       status: 200,
       json: async () => ({
@@ -171,7 +171,7 @@ describe("createBooking", () => {
   };
 
   it("posts the v2 attendee shape and returns the normalized booking", async () => {
-    const fetchMock = vi.fn(async () => ({
+    const fetchMock = vi.fn(async (_url: string, _opts: RequestInit) => ({
       ok: true,
       status: 200,
       json: async () => ({
@@ -234,5 +234,81 @@ describe("createBooking", () => {
       timeZone: "UTC",
     });
     expect(booking).toBeNull();
+  });
+});
+
+import { rescheduleBooking, cancelBooking } from "./calcom-client";
+
+const baseCfg = {
+  apiKey: "cal_live_x",
+  baseUrl: "https://api.cal.com",
+  defaultEventTypeId: 1,
+  timezone: "UTC",
+  eventTypes: {},
+};
+
+describe("rescheduleBooking", () => {
+  it("posts the new start + reason and returns the (possibly new) booking", async () => {
+    const fetchMock = vi.fn(async (_url: string, _opts: RequestInit) => ({
+      ok: true,
+      status: 200,
+      json: async () => ({
+        status: "success",
+        data: {
+          uid: "bk_new",
+          start: "2050-09-10T10:00:00Z",
+          end: "2050-09-10T11:00:00Z",
+          status: "accepted",
+        },
+      }),
+    }));
+    vi.stubGlobal("fetch", fetchMock);
+
+    const b = await rescheduleBooking(baseCfg, "bk_old", {
+      startISO: "2050-09-10T10:00:00Z",
+      reason: "cliente pidió cambio",
+    });
+    expect(b?.uid).toBe("bk_new");
+    const [url, opts] = fetchMock.mock.calls[0];
+    expect(url).toBe("https://api.cal.com/v2/bookings/bk_old/reschedule");
+    expect(JSON.parse(opts.body as string)).toEqual({
+      start: "2050-09-10T10:00:00Z",
+      reschedulingReason: "cliente pidió cambio",
+    });
+  });
+
+  it("returns null on failure", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => ({ ok: false, status: 404, text: async () => "nope" })),
+    );
+    expect(await rescheduleBooking(baseCfg, "x", { startISO: "a" })).toBeNull();
+  });
+});
+
+describe("cancelBooking", () => {
+  it("posts the cancellation reason and returns true on success", async () => {
+    const fetchMock = vi.fn(async (_url: string, _opts: RequestInit) => ({
+      ok: true,
+      status: 200,
+      json: async () => ({ status: "success", data: {} }),
+    }));
+    vi.stubGlobal("fetch", fetchMock);
+
+    const ok = await cancelBooking(baseCfg, "bk_1", { reason: "ya no puede" });
+    expect(ok).toBe(true);
+    const [url, opts] = fetchMock.mock.calls[0];
+    expect(url).toBe("https://api.cal.com/v2/bookings/bk_1/cancel");
+    expect(JSON.parse(opts.body as string)).toEqual({
+      cancellationReason: "ya no puede",
+    });
+  });
+
+  it("returns false on failure", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => ({ ok: false, status: 500, text: async () => "boom" })),
+    );
+    expect(await cancelBooking(baseCfg, "x", {})).toBe(false);
   });
 });

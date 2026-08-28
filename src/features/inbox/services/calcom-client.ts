@@ -252,3 +252,67 @@ export async function createBooking(
     return null;
   }
 }
+
+export async function rescheduleBooking(
+  cfg: CalComConfig,
+  uid: string,
+  args: { startISO: string; reason?: string },
+): Promise<CalBooking | null> {
+  const body: Record<string, unknown> = { start: args.startISO };
+  if (args.reason) body.reschedulingReason = args.reason;
+
+  try {
+    const res = await fetch(
+      `${cfg.baseUrl}/v2/bookings/${encodeURIComponent(uid)}/reschedule`,
+      {
+        method: "POST",
+        headers: headers(cfg, CAL_VERSION_BOOKINGS),
+        body: JSON.stringify(body),
+      },
+    );
+    if (!res.ok) {
+      console.error(
+        "[calcom] rescheduleBooking failed:",
+        res.status,
+        (await res.text()).slice(0, 200),
+      );
+      return null;
+    }
+    return normalizeBooking((await res.json()) as BookingResponse);
+  } catch (err) {
+    console.error("[calcom] rescheduleBooking error:", err);
+    return null;
+  }
+}
+
+export async function cancelBooking(
+  cfg: CalComConfig,
+  uid: string,
+  args: { reason?: string },
+): Promise<boolean> {
+  const body: Record<string, unknown> = {};
+  if (args.reason) body.cancellationReason = args.reason;
+
+  try {
+    const res = await fetch(
+      `${cfg.baseUrl}/v2/bookings/${encodeURIComponent(uid)}/cancel`,
+      {
+        method: "POST",
+        headers: headers(cfg, CAL_VERSION_BOOKINGS),
+        body: JSON.stringify(body),
+      },
+    );
+    if (!res.ok) {
+      console.error(
+        "[calcom] cancelBooking failed:",
+        res.status,
+        (await res.text()).slice(0, 200),
+      );
+      return false;
+    }
+    return true;
+  } catch (err) {
+    console.error("[calcom] cancelBooking error:", err);
+    return false;
+  }
+}
