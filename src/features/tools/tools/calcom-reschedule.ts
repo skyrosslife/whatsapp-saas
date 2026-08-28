@@ -83,13 +83,16 @@ async function run(args: Args, ctx: ToolContext): Promise<ToolResult> {
     };
   }
 
-  await updateAppointmentByUid(ctx.workspaceId, uid, {
+  const patch: Record<string, unknown> = {
     external_uid: booking.uid,
     scheduled_at: booking.start,
     end_at: booking.end,
     reschedule_reason: args.reason ?? null,
     updated_at: new Date().toISOString(),
-  });
+  };
+  if (uid !== booking.uid) patch.meta = { previous_uid: uid };
+
+  await updateAppointmentByUid(ctx.workspaceId, uid, patch);
 
   return {
     ok: true,

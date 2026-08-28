@@ -117,6 +117,32 @@ describe("calcom_reschedule", () => {
     expect(rescheduleBooking).not.toHaveBeenCalled();
   });
 
+  it("filters the local row by the OLD uid but writes the NEW uid", async () => {
+    findUpcomingAppointments.mockResolvedValue([
+      { external_uid: "bk_old", scheduled_at: "2050-09-06T10:00:00Z" },
+    ]);
+    rescheduleBooking.mockResolvedValue({
+      uid: "bk_new",
+      start: "2050-09-10T10:00:00Z",
+      end: "2050-09-10T11:00:00Z",
+      status: "accepted",
+    });
+    const res = await calcomRescheduleTool.run(
+      { new_datetime_iso: "2050-09-10T10:00:00Z" },
+      ctx,
+    );
+    expect(res.ok).toBe(true);
+    expect(res.output).toMatchObject({ uid: "bk_new" });
+    expect(updateAppointmentByUid).toHaveBeenCalledWith(
+      "ws1",
+      "bk_old",
+      expect.objectContaining({
+        external_uid: "bk_new",
+        scheduled_at: "2050-09-10T10:00:00Z",
+      }),
+    );
+  });
+
   it("returns an error when the Cal.com reschedule fails", async () => {
     findUpcomingAppointments.mockResolvedValue([
       { external_uid: "bk_1", scheduled_at: "2050-09-06T10:00:00Z" },
