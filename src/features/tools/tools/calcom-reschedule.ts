@@ -31,33 +31,42 @@ async function run(args: Args, ctx: ToolContext): Promise<ToolResult> {
     };
   }
 
-  let uid = args.appointment_uid ?? null;
-  if (!uid) {
-    const upcoming = await findUpcomingAppointments(
-      ctx.workspaceId,
-      ctx.contactId || null,
-    );
-    if (upcoming.length === 0) {
+  const upcoming = await findUpcomingAppointments(
+    ctx.workspaceId,
+    ctx.contactId || null,
+  );
+
+  let uid: string;
+  if (args.appointment_uid) {
+    const match = upcoming.find((a) => a.external_uid === args.appointment_uid);
+    if (!match) {
       return {
         ok: false,
         output: null,
-        error: "No encuentro una cita próxima a tu nombre para reprogramar",
+        error: "No encuentro esa cita a tu nombre",
       };
     }
-    if (upcoming.length > 1) {
-      return {
-        ok: false,
-        output: {
-          needs_disambiguation: true,
-          appointments: upcoming.map((a) => ({
-            uid: a.external_uid,
-            start: a.scheduled_at,
-          })),
-        },
-        error:
-          "Hay más de una cita próxima; pregunta al cliente cuál quiere reprogramar",
-      };
-    }
+    uid = match.external_uid;
+  } else if (upcoming.length === 0) {
+    return {
+      ok: false,
+      output: null,
+      error: "No encuentro una cita próxima a tu nombre para reprogramar",
+    };
+  } else if (upcoming.length > 1) {
+    return {
+      ok: false,
+      output: {
+        needs_disambiguation: true,
+        appointments: upcoming.map((a) => ({
+          uid: a.external_uid,
+          start: a.scheduled_at,
+        })),
+      },
+      error:
+        "Hay más de una cita próxima; pregunta al cliente cuál quiere reprogramar",
+    };
+  } else {
     uid = upcoming[0].external_uid;
   }
 

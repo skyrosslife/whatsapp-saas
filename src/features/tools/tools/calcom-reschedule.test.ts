@@ -82,7 +82,10 @@ describe("calcom_reschedule", () => {
     );
   });
 
-  it("uses an explicit appointment_uid without looking up", async () => {
+  it("uses an explicit appointment_uid when it belongs to the contact", async () => {
+    findUpcomingAppointments.mockResolvedValue([
+      { external_uid: "bk_9", scheduled_at: "2050-09-11T09:00:00Z" },
+    ]);
     rescheduleBooking.mockResolvedValue({
       uid: "bk_9",
       start: "2050-09-11T10:00:00Z",
@@ -94,7 +97,24 @@ describe("calcom_reschedule", () => {
       ctx,
     );
     expect(res.ok).toBe(true);
-    expect(findUpcomingAppointments).not.toHaveBeenCalled();
+    expect(rescheduleBooking).toHaveBeenCalledWith(
+      expect.anything(),
+      "bk_9",
+      expect.objectContaining({ startISO: "2050-09-11T10:00:00Z" }),
+    );
+  });
+
+  it("rejects an appointment_uid that is not the contact's own", async () => {
+    findUpcomingAppointments.mockResolvedValue([
+      { external_uid: "bk_1", scheduled_at: "2050-09-06T10:00:00Z" },
+    ]);
+    const res = await calcomRescheduleTool.run(
+      { new_datetime_iso: "2050-09-11T10:00:00Z", appointment_uid: "bk_other" },
+      ctx,
+    );
+    expect(res.ok).toBe(false);
+    expect(res.error).toMatch(/no encuentro esa cita/i);
+    expect(rescheduleBooking).not.toHaveBeenCalled();
   });
 
   it("returns an error when the Cal.com reschedule fails", async () => {

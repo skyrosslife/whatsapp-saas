@@ -67,6 +67,31 @@ describe("calcom_cancel", () => {
     );
   });
 
+  it("uses an explicit appointment_uid when it belongs to the contact", async () => {
+    findUpcomingAppointments.mockResolvedValue([
+      { external_uid: "bk_9", scheduled_at: "2050-09-11T09:00:00Z" },
+    ]);
+    cancelBooking.mockResolvedValue(true);
+    const res = await calcomCancelTool.run({ appointment_uid: "bk_9" }, ctx);
+    expect(res.ok).toBe(true);
+    expect(cancelBooking).toHaveBeenCalledWith(expect.anything(), "bk_9", {
+      reason: undefined,
+    });
+  });
+
+  it("rejects an appointment_uid that is not the contact's own", async () => {
+    findUpcomingAppointments.mockResolvedValue([
+      { external_uid: "bk_1", scheduled_at: "2050-09-06T10:00:00Z" },
+    ]);
+    const res = await calcomCancelTool.run(
+      { appointment_uid: "bk_other" },
+      ctx,
+    );
+    expect(res.ok).toBe(false);
+    expect(res.error).toMatch(/no encuentro esa cita/i);
+    expect(cancelBooking).not.toHaveBeenCalled();
+  });
+
   it("returns an error when the Cal.com cancel fails", async () => {
     findUpcomingAppointments.mockResolvedValue([
       { external_uid: "bk_1", scheduled_at: "2050-09-06T10:00:00Z" },
