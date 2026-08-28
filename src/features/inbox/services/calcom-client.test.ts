@@ -53,6 +53,20 @@ describe("getCalComConfig", () => {
     });
   });
 
+  it("treats a null / empty / zero default_event_type_id as null", async () => {
+    for (const bad of [null, "", 0, "0", undefined]) {
+      sb.table("integrations").result = {
+        data: {
+          credentials: { calcom_api_key: "cal_live_x" },
+          config: { default_event_type_id: bad },
+        },
+        error: null,
+      };
+      const cfg = await getCalComConfig("ws1");
+      expect(cfg?.defaultEventTypeId).toBeNull();
+    }
+  });
+
   it("falls back to business_info timezone when config.timezone is unset", async () => {
     sb.table("integrations").result = {
       data: {

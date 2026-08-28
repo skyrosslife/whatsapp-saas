@@ -83,12 +83,11 @@ export async function getCalComConfig(
       : DEFAULT_BASE_URL;
   const baseUrl = rawBase.replace(/\/+$/, "");
 
+  const parsedEventTypeId = Number(config.default_event_type_id);
   const defaultEventTypeId =
-    typeof config.default_event_type_id === "number"
-      ? config.default_event_type_id
-      : Number.isFinite(Number(config.default_event_type_id))
-        ? Number(config.default_event_type_id)
-        : null;
+    Number.isInteger(parsedEventTypeId) && parsedEventTypeId > 0
+      ? parsedEventTypeId
+      : null;
 
   const eventTypes: Record<string, number> = {};
   if (config.event_types && typeof config.event_types === "object") {

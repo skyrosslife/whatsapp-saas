@@ -29,6 +29,8 @@ tsconfig.tsbuildinfo
 .env*.local
 # ...but DO ship the template so the installer knows what to ask for
 !.env.local.example
+# temp installer scratch file (holds the DB password briefly)
+env.install.local
 
 # Debug logs
 npm-debug.log*
@@ -67,3 +69,4 @@ supabase/cron/*.filled.sql
 
 # NOTE: package-lock.json is intentionally NOT ignored.
 # A distribution template must ship its lockfile for reproducible installs.
+.env*
