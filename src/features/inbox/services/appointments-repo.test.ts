@@ -84,6 +84,11 @@ describe("findUpcomingAppointments", () => {
     expect(f).toContainEqual({ col: "workspace_id", val: "ws1" });
     expect(f).toContainEqual({ col: "contact_id", val: "c1" });
     expect(f).toContainEqual({ col: "status", val: "booked" });
+    expect(f).toContainEqual({ col: "provider", val: "caldotcom" });
+    expect(f).toContainEqual({
+      col: "scheduled_at",
+      val: expect.any(String),
+    });
   });
 
   it("returns [] when contactId is null", async () => {

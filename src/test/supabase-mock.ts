@@ -42,7 +42,14 @@ export function makeSupabaseMock(): SupabaseMock {
     builder.select = vi.fn(chain);
     builder.order = vi.fn(chain);
     builder.limit = vi.fn(chain);
-    builder.gt = vi.fn(chain);
+    builder.gt = vi.fn((col: string, val: unknown) => {
+      t.filters.push({ col, val });
+      return builder;
+    });
+    builder.not = vi.fn((col: string, op: unknown, val: unknown) => {
+      t.filters.push({ col, val: `${op}:${val}` });
+      return builder;
+    });
     builder.eq = vi.fn((col: string, val: unknown) => {
       t.filters.push({ col, val });
       return builder;

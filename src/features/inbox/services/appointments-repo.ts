@@ -76,6 +76,8 @@ export async function findUpcomingAppointments(
     .eq("workspace_id", workspaceId)
     .eq("contact_id", contactId)
     .eq("status", "booked")
+    .eq("provider", "caldotcom")
+    .not("external_uid", "is", null)
     .gt("scheduled_at", new Date().toISOString())
     .order("scheduled_at");
 
