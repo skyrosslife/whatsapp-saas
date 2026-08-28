@@ -26,6 +26,22 @@
 
    Task 6 is **already applied** to the remote DB (commit `1d05c09`). Tasks 7/9/10/11 code and tests below must use `scheduled_at` / `meta` / `'booked'` in place of `start_at` / `raw` / `'accepted'`.
 
+## Post-review fixes (applied after the final code review)
+
+- **C1** — `calcom_reschedule` / `calcom_cancel` now always resolve against the contact's own upcoming appointments; an LLM-supplied `appointment_uid` must be one of them or it's rejected. (`0279eb7`)
+- **C2** — empty/`null`/`0` `default_event_type_id` resolves to `null` (was `0`, which silently passed the guard). (`84aa06a`)
+- **I1** — `findUpcomingAppointments` scoped to `provider='caldotcom'` + `external_uid IS NOT NULL`. (`e43a4b7`)
+- **I4** — `getCalComConfig` wraps `decryptCredentials` and returns `null` instead of throwing. (`1d3dd83`)
+- **I6** — reschedule keeps the previous Cal.com uid in `meta.previous_uid` when Cal.com issues a new one. (`e6af4d6`)
+- **I7** — added the `bk_old → bk_new` reschedule test; the supabase mock now records `.gt` / `.not`.
+
+## Deferred to a follow-up ticket (not blocking)
+
+- **I2** — `calcom_book` returns `ok:true` even if the local `appointments` insert fails (Cal.com booking exists but is unreachable from chat). Should surface `local_record:false` + push to handoff, or retry.
+- **I3** — the registry's 10s timeout + 1 retry can double-book a slow `calcom_book`. Set `retries:0` for write tools or add an idempotency key.
+- **I5** — `config.base_url` is unvalidated → SSRF. Apply the existing `ssrf-guard.ts` (`validateWebhookUrl`, SEC-08) to `base_url` at save time.
+- Minor: `minRole:"manager"` on the calcom test route; real slot count vs the 20 cap; `resolveEventTypeId` silently falls back to default on an unknown name; `attendee_email` lands in `events.payload`.
+
 ---
 
 ## File Structure
