@@ -28,6 +28,26 @@ import type { ContactRow } from "@/features/inbox/types";
 // ──────────────────────────────────────────────────────────────────────────────
 
 type Stage = "new" | "engaged" | "qualified" | "customer" | "lost";
+type PipelineStage =
+  | "NUEVO"
+  | "CALIFICANDO"
+  | "REVISION"
+  | "LINK_ENVIADO"
+  | "AGENDADO"
+  | "CLIENTE"
+  | "NUTRIR"
+  | "PERDIDO";
+
+const PIPELINE_STAGES: PipelineStage[] = [
+  "NUEVO",
+  "CALIFICANDO",
+  "REVISION",
+  "LINK_ENVIADO",
+  "AGENDADO",
+  "CLIENTE",
+  "NUTRIR",
+  "PERDIDO",
+];
 
 const STAGE_LABELS: Record<Stage, string> = {
   new: "Nuevo",
@@ -81,6 +101,9 @@ export function CrmPanel({
   const [stage, setStage] = useState<Stage>(
     (contact.stage as Stage | null) ?? "new",
   );
+  const [pipelineStage, setPipelineStage] = useState<PipelineStage>(
+    (contact.pipeline_stage as PipelineStage | null) ?? "NUEVO",
+  );
   const [tags, setTags] = useState<string[]>(contact.tags ?? []);
   const [tagInput, setTagInput] = useState("");
   const [optIn, setOptIn] = useState(contact.opt_in);
@@ -114,10 +137,14 @@ export function CrmPanel({
 
   function handleSave() {
     startTransition(async () => {
+      const includePipeline =
+        contact.pipeline_stage != null ||
+        pipelineStage !== (contact.pipeline_stage ?? "NUEVO");
       const result = await updateContact(contact.id, {
         name: name || undefined,
         email: email || undefined,
         stage,
+        ...(includePipeline ? { pipeline_stage: pipelineStage } : {}),
         tags,
         opt_in: optIn,
       });
@@ -238,6 +265,27 @@ export function CrmPanel({
 
         {crmOpen && (
           <div className="px-4 py-3 space-y-3">
+            <div className="space-y-1">
+              <Label className="text-[10px] text-[hsl(var(--electric-lime))] uppercase tracking-wider">
+                Pipeline setter
+              </Label>
+              <Select
+                value={pipelineStage}
+                onValueChange={(value) => setPipelineStage(value as PipelineStage)}
+              >
+                <SelectTrigger className="h-7 text-xs">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {PIPELINE_STAGES.map((item) => (
+                    <SelectItem key={item} value={item} className="text-xs">
+                      {item}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
             {/* Stage */}
             <div className="space-y-1">
               <Label className="text-[10px] text-[hsl(var(--electric-lime))] uppercase tracking-wider">

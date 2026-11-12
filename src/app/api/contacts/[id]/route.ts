@@ -11,6 +11,18 @@ const PatchContactSchema = z.object({
   name: z.string().min(1, "El nombre no puede estar vacío").optional(),
   email: z.string().email("Email inválido").optional(),
   stage: z.enum(["new", "engaged", "qualified", "customer", "lost"]).optional(),
+  pipeline_stage: z
+    .enum([
+      "NUEVO",
+      "CALIFICANDO",
+      "REVISION",
+      "LINK_ENVIADO",
+      "AGENDADO",
+      "CLIENTE",
+      "NUTRIR",
+      "PERDIDO",
+    ])
+    .optional(),
   tags: z.array(z.string()).optional(),
   opt_in: z.boolean().optional(),
 });
@@ -71,6 +83,19 @@ export async function PATCH(req: NextRequest, { params }: RouteParams) {
     .eq("id", contactId)
     .select()
     .single();
+
+  if (!updateError && parsed.data.pipeline_stage) {
+    const { error: convError } = await supabase
+      .from("conversations")
+      .update({
+        pipeline_stage: parsed.data.pipeline_stage,
+        updated_at: new Date().toISOString(),
+      })
+      .eq("contact_id", contactId);
+    if (convError) {
+      console.warn("[PATCH /api/contacts/:id] pipeline mirror:", convError.message);
+    }
+  }
 
   if (updateError) {
     console.error(

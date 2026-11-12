@@ -1,5 +1,7 @@
 import { NextResponse } from "next/server";
 import { processNextBatch } from "@/features/inbox/services/buffer";
+import { getSetterConfig } from "@/features/inbox/services/setter";
+import { runSetterFollowups } from "@/features/setter/runtime";
 
 // ──────────────────────────────────────────────────────────────────────────────
 // Vercel Cron: process buffer batches every minute
@@ -36,5 +38,22 @@ export async function GET(request: Request): Promise<NextResponse> {
 
   const processedCount = results.filter((r) => r.processed).length;
 
-  return NextResponse.json({ ok: true, processed: processedCount });
+  let followups = 0;
+  try {
+    const result = await runSetterFollowups((workspaceId) =>
+      getSetterConfig(workspaceId),
+    );
+    followups = result.sent;
+  } catch (err) {
+    console.error(
+      "[cron] setter followups failed:",
+      err instanceof Error ? err.message : err,
+    );
+  }
+
+  return NextResponse.json({
+    ok: true,
+    processed: processedCount,
+    followups,
+  });
 }

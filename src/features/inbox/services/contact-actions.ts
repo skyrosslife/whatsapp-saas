@@ -13,10 +13,22 @@ import type { ContactRow } from "@/features/inbox/types";
 // Schemas
 // ──────────────────────────────────────────────────────────────────────────────
 
+const PIPELINE_STAGES = [
+  "NUEVO",
+  "CALIFICANDO",
+  "REVISION",
+  "LINK_ENVIADO",
+  "AGENDADO",
+  "CLIENTE",
+  "NUTRIR",
+  "PERDIDO",
+] as const;
+
 const UpdateContactSchema = z.object({
   name: z.string().min(1, "El nombre es requerido").optional(),
   email: z.string().email("Email inválido").optional(),
   stage: z.enum(["new", "engaged", "qualified", "customer", "lost"]).optional(),
+  pipeline_stage: z.enum(PIPELINE_STAGES).optional(),
   tags: z.array(z.string()).optional(),
   opt_in: z.boolean().optional(),
 });
@@ -75,6 +87,19 @@ export async function updateContact(
     id: string;
     workspace_id: string;
   };
+
+  if (parsed.data.pipeline_stage) {
+    const { error: convError } = await supabase
+      .from("conversations")
+      .update({
+        pipeline_stage: parsed.data.pipeline_stage,
+        updated_at: new Date().toISOString(),
+      })
+      .eq("contact_id", contactId);
+    if (convError) {
+      console.warn("[updateContact] pipeline mirror failed:", convError.message);
+    }
+  }
 
   // 4. Fire-and-forget HL sync (do not block UI)
   syncContactToHL(workspace_id, contactId).catch((err: unknown) => {

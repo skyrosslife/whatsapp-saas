@@ -28,6 +28,8 @@ export interface ContactRow {
   name: string | null;
   email: string | null;
   stage: string | null;
+  /** Skala setter pipeline. Null on contacts that have not been qualified. */
+  pipeline_stage?: string | null;
   tags: string[] | null;
   opt_in: boolean;
   created_at: string;
@@ -45,6 +47,8 @@ export interface ConversationRow {
   last_message_at: string | null;
   window_expires_at: string | null;
   unread_count: number;
+  /** Skala setter pipeline. Absent until the migration is applied. */
+  pipeline_stage?: string | null;
   created_at: string;
   updated_at: string;
 }
