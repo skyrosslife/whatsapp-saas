@@ -59,6 +59,7 @@ interface SetterConfig {
   umbral_prioritario: number;
   seguimientos_max: number;
   system_prompt: string;
+  calcom_webhook_secret: string | null;
   questions: SetterQuestion[];
   knockout_rules: KnockoutRule[];
   scoring: { threshold: number; max_score: number };
@@ -103,6 +104,7 @@ const DEFAULT_CONFIG: Omit<SetterConfig, "id"> = {
   umbral_prioritario: 75,
   seguimientos_max: 2,
   system_prompt: SKALA_SYSTEM_PROMPT_PLACEHOLDER,
+  calcom_webhook_secret: "",
   questions: [],
   knockout_rules: [],
   scoring: { threshold: 50, max_score: 100 },
@@ -123,6 +125,7 @@ function toDraft(cfg: SetterConfig): Omit<SetterConfig, "id"> {
     umbral_prioritario: cfg.umbral_prioritario ?? 75,
     seguimientos_max: cfg.seguimientos_max ?? 2,
     system_prompt: cfg.system_prompt || SKALA_SYSTEM_PROMPT_PLACEHOLDER,
+    calcom_webhook_secret: cfg.calcom_webhook_secret ?? "",
     questions: cfg.questions ?? [],
     knockout_rules: cfg.knockout_rules ?? [],
     scoring: cfg.scoring ?? { threshold: 50, max_score: 100 },
@@ -723,6 +726,30 @@ export function SetterAdvancedConfig({ workspaceId }: Props) {
             </div>
 
             <div className="space-y-1.5">
+              <Label htmlFor="setter-calcom-secret">
+                Secreto webhook Cal.com (opcional)
+              </Label>
+              <Input
+                id="setter-calcom-secret"
+                type="password"
+                value={draft.calcom_webhook_secret ?? ""}
+                autoComplete="off"
+                placeholder="Si queda vacío, se usa CALCOM_WEBHOOK_SECRET"
+                onChange={(e) =>
+                  setDraft({
+                    ...draft,
+                    calcom_webhook_secret: e.target.value,
+                  })
+                }
+              />
+              <p className="text-xs text-muted-foreground">
+                El endpoint exige la variable CALCOM_WEBHOOK_SECRET. Este
+                secreto de workspace es una firma adicional y limita la búsqueda
+                del lead a este workspace.
+              </p>
+            </div>
+
+            <div className="space-y-1.5">
               <Label htmlFor="setter-system-prompt">Prompt del sistema</Label>
               <Textarea
                 id="setter-system-prompt"
@@ -733,7 +760,7 @@ export function SetterAdvancedConfig({ workspaceId }: Props) {
                 }
               />
               <p className="text-xs text-muted-foreground">
-                Placeholder hasta pegar el prompt final. El score, la ruta y el link los decide el código, no el modelo.
+                Prompt de Skala. En cada turno el sistema rellena el nombre, los minutos y el link. El modelo no calcula el score, y el link solo entra al prompt si la puerta de código lo autoriza.
               </p>
             </div>
           </div>

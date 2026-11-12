@@ -4,10 +4,8 @@ import { createClient as createSbClient } from "@supabase/supabase-js";
 import { createOpenAI } from "@ai-sdk/openai";
 import { generateObject } from "ai";
 import { z } from "zod";
-import {
-  SKALA_SYSTEM_PROMPT_PLACEHOLDER,
-  type QualifyConfig,
-} from "@/features/setter/qualify";
+import { type QualifyConfig } from "@/features/setter/qualify";
+import { resolveSkalaPromptTemplate } from "@/features/setter/skala-prompt";
 
 function svc() {
   return createSbClient(
@@ -57,11 +55,12 @@ export interface SetterConfig extends QualifyConfig {
   scoring: { threshold: number; max_score: number };
   post_action: Record<string, unknown>;
   seguimientos_max: number;
+  calcom_webhook_secret: string | null;
 }
 
 const BASE_COLUMNS =
   "id, name, enabled, questions, knockout_rules, scoring, post_action";
-const FULL_COLUMNS = `${BASE_COLUMNS}, engine, bot_name, link_agenda, link_demo, call_minutes, garantia_activa, umbral_agenda, umbral_prioritario, seguimientos_max, system_prompt`;
+const FULL_COLUMNS = `${BASE_COLUMNS}, engine, bot_name, link_agenda, link_demo, call_minutes, garantia_activa, umbral_agenda, umbral_prioritario, seguimientos_max, system_prompt, calcom_webhook_secret`;
 
 function mapSetterRow(data: Record<string, unknown>): SetterConfig {
   const engine = data.engine === "skala" ? "skala" : "generic";
@@ -97,10 +96,14 @@ function mapSetterRow(data: Record<string, unknown>): SetterConfig {
         : 75,
     seguimientos_max:
       typeof data.seguimientos_max === "number" ? data.seguimientos_max : 2,
-    system_prompt:
-      typeof data.system_prompt === "string" && data.system_prompt.trim()
-        ? data.system_prompt
-        : SKALA_SYSTEM_PROMPT_PLACEHOLDER,
+    system_prompt: resolveSkalaPromptTemplate(
+      typeof data.system_prompt === "string" ? data.system_prompt : "",
+    ),
+    calcom_webhook_secret:
+      typeof data.calcom_webhook_secret === "string" &&
+      data.calcom_webhook_secret.trim()
+        ? data.calcom_webhook_secret.trim()
+        : null,
   };
 }
 

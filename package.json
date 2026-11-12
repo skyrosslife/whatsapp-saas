@@ -8,7 +8,7 @@
     "start": "next start",
     "lint": "eslint src/ middleware.ts",
     "typecheck": "tsc --noEmit",
-    "test": "node --import tsx --test src/features/setter/qualify.test.ts",
+    "test": "node --import tsx --test src/features/setter/*.test.ts",
     "test:e2e": "playwright test",
     "test:e2e:headed": "playwright test --headed"
   },

@@ -46,7 +46,8 @@ const SkalaFields = {
   umbral_agenda: z.number().int().min(0).max(100).optional(),
   umbral_prioritario: z.number().int().min(0).max(100).optional(),
   seguimientos_max: z.number().int().min(0).max(5).optional(),
-  system_prompt: z.string().max(20000).optional(),
+  system_prompt: z.string().max(40000).optional(),
+  calcom_webhook_secret: z.string().max(200).nullable().optional(),
 };
 
 const CreateSchema = z.object({
@@ -71,7 +72,7 @@ const PatchSchema = z.object({
 });
 
 const SETTER_COLUMNS =
-  "id, name, enabled, questions, knockout_rules, scoring, post_action, engine, bot_name, link_agenda, link_demo, call_minutes, garantia_activa, umbral_agenda, umbral_prioritario, seguimientos_max, system_prompt";
+  "id, name, enabled, questions, knockout_rules, scoring, post_action, engine, bot_name, link_agenda, link_demo, call_minutes, garantia_activa, umbral_agenda, umbral_prioritario, seguimientos_max, system_prompt, calcom_webhook_secret";
 
 function blankToNull(value: string | null | undefined): string | null | undefined {
   if (value == null) return value;
@@ -79,11 +80,18 @@ function blankToNull(value: string | null | undefined): string | null | undefine
   return trimmed.length > 0 ? trimmed : null;
 }
 
-function normalizeSetterWrite<T extends { link_agenda?: string | null; link_demo?: string | null; umbral_agenda?: number; umbral_prioritario?: number }>(
-  data: T,
-): { ok: true; data: T } | { ok: false; error: string } {
+function normalizeSetterWrite<
+  T extends {
+    link_agenda?: string | null;
+    link_demo?: string | null;
+    calcom_webhook_secret?: string | null;
+    umbral_agenda?: number;
+    umbral_prioritario?: number;
+  },
+>(data: T): { ok: true; data: T } | { ok: false; error: string } {
   const link_agenda = blankToNull(data.link_agenda);
   const link_demo = blankToNull(data.link_demo);
+  const calcom_webhook_secret = blankToNull(data.calcom_webhook_secret);
   if (
     data.umbral_agenda != null &&
     data.umbral_prioritario != null &&
@@ -96,7 +104,7 @@ function normalizeSetterWrite<T extends { link_agenda?: string | null; link_demo
   }
   return {
     ok: true,
-    data: { ...data, link_agenda, link_demo },
+    data: { ...data, link_agenda, link_demo, calcom_webhook_secret },
   };
 }
 

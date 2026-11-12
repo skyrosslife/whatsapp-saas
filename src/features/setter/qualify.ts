@@ -2,6 +2,13 @@
 // The model may extract fields. It never supplies the score, the tier, the
 // route, or the decision to send a booking link.
 
+import {
+  renderSkalaSystemPrompt,
+  SKALA_SYSTEM_PROMPT,
+} from "./skala-prompt";
+
+export { SKALA_SYSTEM_PROMPT as SKALA_SYSTEM_PROMPT_PLACEHOLDER } from "./skala-prompt";
+
 export const DOLORES = [
   "fuera_de_horario",
   "demora_mas_1h",
@@ -82,16 +89,6 @@ export const REVISION_MIN = 35;
 export const SKALA_LINK_AGENDA_EXAMPLE =
   "https://cal.com/sky-ross/diagnostico-skala";
 
-export const SKALA_SYSTEM_PROMPT_PLACEHOLDER = `PLACEHOLDER — reemplaza este texto con el prompt final del setter de Skala.
-
-Identidad provisional: eres el Asistente de Skala, una inteligencia artificial. Si te preguntan, dilo con claridad. Nunca te hagas pasar por Sky ni por una persona.
-
-Idioma: español neutro, sin jerga chilena. Tutea por defecto. Usa usted si el lead usa usted o se presenta como Dr. o Dra.
-
-Objetivo: conversar con dueños de clínicas (dental, estética o fisioterapia), entender su operación y, solo cuando el sistema lo indique en el turno, ofrecer una llamada con Sky.
-
-No inventes precios, montos, garantías ni enlaces. Si este texto aún es el placeholder, sigue las instrucciones de turno que el sistema agrega al final.`;
-
 /** Example config for the Skala workspace. `enabled` stays off until a human turns it on. */
 export const SKALA_WORKSPACE_EXAMPLE = {
   engine: "skala" as const,
@@ -104,7 +101,7 @@ export const SKALA_WORKSPACE_EXAMPLE = {
   umbral_agenda: 55,
   umbral_prioritario: 75,
   seguimientos_max: 2,
-  system_prompt: SKALA_SYSTEM_PROMPT_PLACEHOLDER,
+  system_prompt: SKALA_SYSTEM_PROMPT,
 };
 
 export interface LeadProfile {
@@ -772,13 +769,17 @@ export function buildTurnDirective(input: {
     `Multisede: ${profile.multisede ? "sí" : "no"}`,
     `Consultas WhatsApp/día: ${profile.consultas_whatsapp_dia ?? "desconocido"}`,
     `Dolores: ${profile.dolores.join(", ") || "ninguno"}`,
-    `Score interno (no lo menciones): ${qualification.score}`,
     `Ruta: ${qualification.route ?? "calificando"}`,
   ];
+  const renderedPrompt = renderSkalaSystemPrompt(
+    config.system_prompt,
+    config,
+    qualification.link.send,
+  );
 
   return [
     "## Prompt del workspace",
-    config.system_prompt.trim(),
+    renderedPrompt,
     "## Identidad de este turno",
     `Te llamas ${config.bot_name}. Eres una inteligencia artificial. Si te preguntan, lo dices. No eres Sky y no eres una persona.`,
     "## Trato",
