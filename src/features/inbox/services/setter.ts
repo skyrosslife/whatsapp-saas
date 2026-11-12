@@ -4,6 +4,10 @@ import { createClient as createSbClient } from "@supabase/supabase-js";
 import { createOpenAI } from "@ai-sdk/openai";
 import { generateObject } from "ai";
 import { z } from "zod";
+import {
+  SKALA_SYSTEM_PROMPT_PLACEHOLDER,
+  type QualifyConfig,
+} from "@/features/setter/qualify";
 
 function svc() {
   return createSbClient(
@@ -43,14 +47,66 @@ export interface KnockoutRule {
   action: string;
 }
 
-export interface SetterConfig {
+export interface SetterConfig extends QualifyConfig {
   id: string;
   name: string;
   enabled: boolean;
+  engine: "generic" | "skala";
   questions: SetterQuestion[];
   knockout_rules: KnockoutRule[];
   scoring: { threshold: number; max_score: number };
   post_action: Record<string, unknown>;
+  seguimientos_max: number;
+}
+
+const BASE_COLUMNS =
+  "id, name, enabled, questions, knockout_rules, scoring, post_action";
+const FULL_COLUMNS = `${BASE_COLUMNS}, engine, bot_name, link_agenda, link_demo, call_minutes, garantia_activa, umbral_agenda, umbral_prioritario, seguimientos_max, system_prompt`;
+
+function mapSetterRow(data: Record<string, unknown>): SetterConfig {
+  const engine = data.engine === "skala" ? "skala" : "generic";
+  const link =
+    typeof data.link_agenda === "string" ? data.link_agenda.trim() : "";
+  const demo = typeof data.link_demo === "string" ? data.link_demo.trim() : "";
+  return {
+    id: data.id as string,
+    name: data.name as string,
+    enabled: data.enabled as boolean,
+    engine,
+    questions: (data.questions as SetterQuestion[]) ?? [],
+    knockout_rules: (data.knockout_rules as KnockoutRule[]) ?? [],
+    scoring: (data.scoring as { threshold: number; max_score: number }) ?? {
+      threshold: 50,
+      max_score: 100,
+    },
+    post_action: (data.post_action as Record<string, unknown>) ?? {},
+    bot_name:
+      typeof data.bot_name === "string" && data.bot_name.trim()
+        ? data.bot_name.trim()
+        : "Asistente de Skala",
+    link_agenda: link || null,
+    link_demo: demo || null,
+    call_minutes:
+      typeof data.call_minutes === "number" ? data.call_minutes : 20,
+    garantia_activa: data.garantia_activa === true,
+    umbral_agenda:
+      typeof data.umbral_agenda === "number" ? data.umbral_agenda : 55,
+    umbral_prioritario:
+      typeof data.umbral_prioritario === "number"
+        ? data.umbral_prioritario
+        : 75,
+    seguimientos_max:
+      typeof data.seguimientos_max === "number" ? data.seguimientos_max : 2,
+    system_prompt:
+      typeof data.system_prompt === "string" && data.system_prompt.trim()
+        ? data.system_prompt
+        : SKALA_SYSTEM_PROMPT_PLACEHOLDER,
+  };
+}
+
+function missingColumn(error: { message?: string } | null): boolean {
+  const message = error?.message ?? "";
+  return /column/i.test(message) && /does not exist|schema cache/i.test(message);
 }
 
 const EvalSchema = z.object({
@@ -78,15 +134,28 @@ export async function getSetterConfig(
 ): Promise<SetterConfig | null> {
   const supabase = svc();
 
-  const { data, error } = await supabase
+  const primary = await supabase
     .from("setter_configs")
-    .select(
-      "id, name, enabled, questions, knockout_rules, scoring, post_action",
-    )
+    .select(FULL_COLUMNS)
     .eq("workspace_id", workspaceId)
     .eq("enabled", true)
     .limit(1)
     .maybeSingle();
+
+  let data = primary.data as Record<string, unknown> | null;
+  let error = primary.error;
+
+  if (error && missingColumn(error)) {
+    const fallback = await supabase
+      .from("setter_configs")
+      .select(BASE_COLUMNS)
+      .eq("workspace_id", workspaceId)
+      .eq("enabled", true)
+      .limit(1)
+      .maybeSingle();
+    data = fallback.data as Record<string, unknown> | null;
+    error = fallback.error;
+  }
 
   if (error) {
     console.error("[setter] getSetterConfig error:", error);
@@ -94,19 +163,7 @@ export async function getSetterConfig(
   }
 
   if (!data) return null;
-
-  return {
-    id: data.id as string,
-    name: data.name as string,
-    enabled: data.enabled as boolean,
-    questions: (data.questions as SetterQuestion[]) ?? [],
-    knockout_rules: (data.knockout_rules as KnockoutRule[]) ?? [],
-    scoring: (data.scoring as { threshold: number; max_score: number }) ?? {
-      threshold: 50,
-      max_score: 100,
-    },
-    post_action: (data.post_action as Record<string, unknown>) ?? {},
-  };
+  return mapSetterRow(data);
 }
 
 /**

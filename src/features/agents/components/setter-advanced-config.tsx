@@ -9,7 +9,12 @@ import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Separator } from "@/components/ui/separator";
+import { Textarea } from "@/components/ui/textarea";
 import { cn } from "@/lib/utils";
+import {
+  SKALA_LINK_AGENDA_EXAMPLE,
+  SKALA_SYSTEM_PROMPT_PLACEHOLDER,
+} from "@/features/setter/qualify";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -44,6 +49,16 @@ interface SetterConfig {
   id: string;
   name: string;
   enabled: boolean;
+  engine: "generic" | "skala";
+  bot_name: string;
+  link_agenda: string | null;
+  link_demo: string | null;
+  call_minutes: number;
+  garantia_activa: boolean;
+  umbral_agenda: number;
+  umbral_prioritario: number;
+  seguimientos_max: number;
+  system_prompt: string;
   questions: SetterQuestion[];
   knockout_rules: KnockoutRule[];
   scoring: { threshold: number; max_score: number };
@@ -78,11 +93,42 @@ const POST_ACTION_LABELS: Record<PostActionType, string> = {
 const DEFAULT_CONFIG: Omit<SetterConfig, "id"> = {
   name: "Setter Ventas",
   enabled: false,
+  engine: "generic",
+  bot_name: "Asistente de Skala",
+  link_agenda: "",
+  link_demo: "",
+  call_minutes: 20,
+  garantia_activa: false,
+  umbral_agenda: 55,
+  umbral_prioritario: 75,
+  seguimientos_max: 2,
+  system_prompt: SKALA_SYSTEM_PROMPT_PLACEHOLDER,
   questions: [],
   knockout_rules: [],
   scoring: { threshold: 50, max_score: 100 },
   post_action: { type: "handoff" },
 };
+
+function toDraft(cfg: SetterConfig): Omit<SetterConfig, "id"> {
+  return {
+    name: cfg.name,
+    enabled: cfg.enabled,
+    engine: cfg.engine === "skala" ? "skala" : "generic",
+    bot_name: cfg.bot_name || "Asistente de Skala",
+    link_agenda: cfg.link_agenda ?? "",
+    link_demo: cfg.link_demo ?? "",
+    call_minutes: cfg.call_minutes ?? 20,
+    garantia_activa: cfg.garantia_activa === true,
+    umbral_agenda: cfg.umbral_agenda ?? 55,
+    umbral_prioritario: cfg.umbral_prioritario ?? 75,
+    seguimientos_max: cfg.seguimientos_max ?? 2,
+    system_prompt: cfg.system_prompt || SKALA_SYSTEM_PROMPT_PLACEHOLDER,
+    questions: cfg.questions ?? [],
+    knockout_rules: cfg.knockout_rules ?? [],
+    scoring: cfg.scoring ?? { threshold: 50, max_score: 100 },
+    post_action: (cfg.post_action as PostAction) ?? { type: "handoff" },
+  };
+}
 
 // ── Sub-components ────────────────────────────────────────────────────────────
 
@@ -291,16 +337,7 @@ export function SetterAdvancedConfig({ workspaceId }: Props) {
       if (!res.ok) throw new Error(json.error ?? "Error al cargar");
       const cfg = json.data ?? null;
       setConfig(cfg);
-      if (cfg) {
-        setDraft({
-          name: cfg.name,
-          enabled: cfg.enabled,
-          questions: cfg.questions,
-          knockout_rules: cfg.knockout_rules,
-          scoring: cfg.scoring,
-          post_action: cfg.post_action as PostAction,
-        });
-      }
+      if (cfg) setDraft(toDraft(cfg));
     } catch (err) {
       setError(err instanceof Error ? err.message : "Error desconocido");
     } finally {
@@ -328,14 +365,7 @@ export function SetterAdvancedConfig({ workspaceId }: Props) {
       if (!res.ok) throw new Error(json.error ?? "Error al crear");
       const cfg = json.data!;
       setConfig(cfg);
-      setDraft({
-        name: cfg.name,
-        enabled: cfg.enabled,
-        questions: cfg.questions,
-        knockout_rules: cfg.knockout_rules,
-        scoring: cfg.scoring,
-        post_action: cfg.post_action as PostAction,
-      });
+      setDraft(toDraft(cfg));
       toast.success("Configuración de setter creada");
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Error al crear");
@@ -528,6 +558,186 @@ export function SetterAdvancedConfig({ workspaceId }: Props) {
             }
           />
         </div>
+      </div>
+
+      <Separator />
+
+      <div className="space-y-4">
+        <SectionHeading
+          title="Calificación Skala"
+          description="Setter para dueños de clínicas. El puntaje se calcula en código. El link solo se envía si la puerta de score lo permite."
+        />
+
+        <div className="space-y-1.5">
+          <Label htmlFor="setter-engine">Motor</Label>
+          <select
+            id="setter-engine"
+            value={draft?.engine ?? "generic"}
+            onChange={(e) =>
+              draft &&
+              setDraft({
+                ...draft,
+                engine: e.target.value as "generic" | "skala",
+              })
+            }
+            className="flex h-9 w-full rounded-md border border-input bg-background px-3 py-1 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+          >
+            <option value="generic">Genérico (preguntas y knockout)</option>
+            <option value="skala">Skala (calificación de clínicas)</option>
+          </select>
+        </div>
+
+        {draft?.engine === "skala" && (
+          <div className="space-y-4">
+            <div className="space-y-1.5">
+              <Label htmlFor="setter-bot-name">Nombre del bot</Label>
+              <Input
+                id="setter-bot-name"
+                value={draft.bot_name}
+                onChange={(e) =>
+                  setDraft({ ...draft, bot_name: e.target.value })
+                }
+              />
+              <p className="text-xs text-muted-foreground">
+                Se presenta como inteligencia artificial. No dice ser Sky ni una persona.
+              </p>
+            </div>
+
+            <div className="space-y-1.5">
+              <Label htmlFor="setter-link-agenda">Link de agenda</Label>
+              <Input
+                id="setter-link-agenda"
+                value={draft.link_agenda ?? ""}
+                placeholder={SKALA_LINK_AGENDA_EXAMPLE}
+                onChange={(e) =>
+                  setDraft({ ...draft, link_agenda: e.target.value })
+                }
+              />
+              <p className="text-xs text-muted-foreground">
+                Si queda vacío, el bot nunca envía un link: etiqueta al lead y lo pasa a un humano. Workspace de Skala (llamada de 20 min en Cal.com): {SKALA_LINK_AGENDA_EXAMPLE}
+              </p>
+            </div>
+
+            <div className="space-y-1.5">
+              <Label htmlFor="setter-link-demo">Link de demo (opcional)</Label>
+              <Input
+                id="setter-link-demo"
+                value={draft.link_demo ?? ""}
+                placeholder="https://"
+                onChange={(e) =>
+                  setDraft({ ...draft, link_demo: e.target.value })
+                }
+              />
+            </div>
+
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-1.5">
+                <Label htmlFor="setter-minutes">Minutos de la llamada</Label>
+                <Input
+                  id="setter-minutes"
+                  type="number"
+                  min={5}
+                  max={180}
+                  value={draft.call_minutes}
+                  onChange={(e) =>
+                    setDraft({
+                      ...draft,
+                      call_minutes: Number(e.target.value),
+                    })
+                  }
+                />
+              </div>
+              <div className="space-y-1.5">
+                <Label htmlFor="setter-followups">Seguimientos máximos</Label>
+                <Input
+                  id="setter-followups"
+                  type="number"
+                  min={0}
+                  max={5}
+                  value={draft.seguimientos_max}
+                  onChange={(e) =>
+                    setDraft({
+                      ...draft,
+                      seguimientos_max: Number(e.target.value),
+                    })
+                  }
+                />
+              </div>
+            </div>
+
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-1.5">
+                <Label htmlFor="setter-umbral-agenda">
+                  Umbral para enviar link ({draft.umbral_agenda})
+                </Label>
+                <Input
+                  id="setter-umbral-agenda"
+                  type="number"
+                  min={0}
+                  max={100}
+                  value={draft.umbral_agenda}
+                  onChange={(e) =>
+                    setDraft({
+                      ...draft,
+                      umbral_agenda: Number(e.target.value),
+                    })
+                  }
+                />
+              </div>
+              <div className="space-y-1.5">
+                <Label htmlFor="setter-umbral-prio">
+                  Umbral prioritario ({draft.umbral_prioritario})
+                </Label>
+                <Input
+                  id="setter-umbral-prio"
+                  type="number"
+                  min={0}
+                  max={100}
+                  value={draft.umbral_prioritario}
+                  onChange={(e) =>
+                    setDraft({
+                      ...draft,
+                      umbral_prioritario: Number(e.target.value),
+                    })
+                  }
+                />
+              </div>
+            </div>
+
+            <div className="flex items-center justify-between rounded-lg border border-border/60 bg-card p-4">
+              <div>
+                <p className="text-sm font-medium text-foreground">
+                  Garantía activa
+                </p>
+                <p className="text-xs text-muted-foreground">
+                  Apagada: el bot no menciona garantías.
+                </p>
+              </div>
+              <Switch
+                checked={draft.garantia_activa}
+                onCheckedChange={(value) =>
+                  setDraft({ ...draft, garantia_activa: value })
+                }
+                aria-label="Garantía activa"
+              />
+            </div>
+
+            <div className="space-y-1.5">
+              <Label htmlFor="setter-system-prompt">Prompt del sistema</Label>
+              <Textarea
+                id="setter-system-prompt"
+                value={draft.system_prompt}
+                rows={8}
+                onChange={(e) =>
+                  setDraft({ ...draft, system_prompt: e.target.value })
+                }
+              />
+              <p className="text-xs text-muted-foreground">
+                Placeholder hasta pegar el prompt final. El score, la ruta y el link los decide el código, no el modelo.
+              </p>
+            </div>
+          </div>
+        )}
       </div>
 
       <Separator />

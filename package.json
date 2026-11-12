@@ -8,6 +8,7 @@
     "start": "next start",
     "lint": "eslint src/ middleware.ts",
     "typecheck": "tsc --noEmit",
+    "test": "node --import tsx --test src/features/setter/qualify.test.ts",
     "test:e2e": "playwright test",
     "test:e2e:headed": "playwright test --headed"
   },
@@ -56,6 +57,7 @@
     "eslint-config-next": "^16.0.0",
     "postcss": "^8.4.0",
     "tailwindcss": "^3.4.0",
+    "tsx": "^4.23.15",
     "typescript": "^5.7.0"
   }
 }

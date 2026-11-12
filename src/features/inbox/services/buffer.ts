@@ -25,6 +25,11 @@ import {
   type ConversationTurn,
 } from "./conversation-history";
 import { getSetterConfig, evaluateLead } from "./setter";
+import {
+  commitSkalaTurn,
+  guardSkalaReply,
+  prepareSkalaTurn,
+} from "@/features/setter/runtime";
 import { syncContactToHL, createHLOpportunity } from "./highlevel-client";
 
 const DEFAULT_SILENCE_MS = 30_000; // 30 seconds silence window
@@ -334,7 +339,7 @@ export async function processNextBatch(): Promise<ProcessBatchResult> {
     // The active agent (if any) selects its mode-scoped published prompt; the
     // resolver falls back to the global prompt when there is no active agent.
     const activeAgent = await getActiveAgent(batch.workspace_id);
-    const [resolvedPrompt, businessInfo, kbResults, kbLinks] =
+    const [resolvedPrompt, businessInfo, kbResults, kbLinks, skalaConfig] =
       await Promise.all([
         resolveSystemPrompt(
           batch.workspace_id,
@@ -343,7 +348,21 @@ export async function processNextBatch(): Promise<ProcessBatchResult> {
         getBusinessInfo(batch.workspace_id),
         searchKb(batch.workspace_id, mergedText, 3),
         listKbSourceLinks(batch.workspace_id),
+        activeAgent?.type === "setter"
+          ? getSetterConfig(batch.workspace_id)
+          : Promise.resolve(null),
       ]);
+    const skalaOn = skalaConfig?.engine === "skala" && skalaConfig.enabled;
+    let prepared: Awaited<ReturnType<typeof prepareSkalaTurn>> = null;
+    if (skalaConfig?.engine === "skala" && skalaConfig.enabled) {
+      prepared = await prepareSkalaTurn({
+        workspaceId: batch.workspace_id,
+        conversationId: batch.conversation_id,
+        config: skalaConfig,
+        history,
+        mergedText,
+      });
+    }
 
     const kbContext = [
       formatKbContext(kbResults),
@@ -385,12 +404,18 @@ export async function processNextBatch(): Promise<ProcessBatchResult> {
 
     // ── 7b. SEC-06: enforce cost policy before calling LLM ───────────────────
     const costPolicy = await enforceCostPolicy(batch.workspace_id);
-    const { systemPrompt: finalSystemPrompt, model: costModel } =
+    const { systemPrompt: costAwarePrompt, model: costModel } =
       await buildCostAwareSystemPrompt(
         batch.workspace_id,
         fullSystemPrompt,
         costPolicy.policy,
       );
+    const skalaDirective = prepared
+      ? `\n\n${prepared.directive}`
+      : skalaOn
+        ? "\n\nNO envíes ningún enlace, URL ni precio. Si hace falta, di que alguien del equipo escribe."
+        : "";
+    const finalSystemPrompt = `${costAwarePrompt}${skalaDirective}`;
 
     if (costPolicy.policy === "cut") {
       console.warn(
@@ -442,11 +467,21 @@ export async function processNextBatch(): Promise<ProcessBatchResult> {
       throw new Error(`YCloud integration not found: ${intError?.message}`);
     }
 
+    // Skala guardrails run in code after the model: no prices, no booking
+    // link unless the score gate passed, one question, no human claim.
+    const outboundBody =
+      skalaOn && skalaConfig
+        ? guardSkalaReply(reply.text, {
+            allowLink: prepared?.allowLink ?? false,
+            config: skalaConfig,
+          })
+        : reply.text;
+
     // ── 10a. Dispatch via single exit point (SEC-04) ────────────────────────
     const dispatchResult = await dispatchText({
       workspaceId: batch.workspace_id,
       conversationId: batch.conversation_id,
-      body: reply.text,
+      body: outboundBody,
       // AI-generated: no senderUserId
     });
 
@@ -476,7 +511,17 @@ export async function processNextBatch(): Promise<ProcessBatchResult> {
     // runs even if the serverless function is frozen right after the batch. It is
     // fully try/catched internally and never throws into the batch path. Dormant
     // unless an enabled setter_config exists for the workspace.
-    if (activeAgent?.type === "setter") {
+    if (skalaOn && skalaConfig && prepared) {
+      await commitSkalaTurn({
+        workspaceId: batch.workspace_id,
+        conversationId: batch.conversation_id,
+        contactId: conversation.contact_id as string,
+        config: skalaConfig,
+        prepared,
+        outboundBody,
+        dispatchOk: dispatchResult.ok,
+      });
+    } else if (activeAgent?.type === "setter") {
       await runSetterEvaluation({
         workspaceId: batch.workspace_id,
         conversationId: batch.conversation_id,

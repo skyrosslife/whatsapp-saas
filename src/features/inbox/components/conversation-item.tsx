@@ -110,6 +110,10 @@ export function ConversationItem({
 
         <p className="font-mono text-[10px] text-muted-foreground/60">
           {contact.phone}
+          {conversation.pipeline_stage &&
+          conversation.pipeline_stage !== "NUEVO"
+            ? ` · ${conversation.pipeline_stage}`
+            : ""}
         </p>
       </div>
     </button>

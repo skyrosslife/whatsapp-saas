@@ -36,6 +36,19 @@ const PostActionSchema = z.object({
   template_name: z.string().max(200).optional(),
 });
 
+const SkalaFields = {
+  engine: z.enum(["generic", "skala"]).optional(),
+  bot_name: z.string().min(1).max(80).optional(),
+  link_agenda: z.string().max(500).nullable().optional(),
+  link_demo: z.string().max(500).nullable().optional(),
+  call_minutes: z.number().int().min(5).max(180).optional(),
+  garantia_activa: z.boolean().optional(),
+  umbral_agenda: z.number().int().min(0).max(100).optional(),
+  umbral_prioritario: z.number().int().min(0).max(100).optional(),
+  seguimientos_max: z.number().int().min(0).max(5).optional(),
+  system_prompt: z.string().max(20000).optional(),
+};
+
 const CreateSchema = z.object({
   name: z.string().min(1).max(200),
   enabled: z.boolean().default(false),
@@ -43,6 +56,7 @@ const CreateSchema = z.object({
   knockout_rules: z.array(KnockoutRuleSchema).default([]),
   scoring: ScoringSchema.default({ threshold: 50, max_score: 100 }),
   post_action: PostActionSchema.default({ type: "handoff" }),
+  ...SkalaFields,
 });
 
 const PatchSchema = z.object({
@@ -53,7 +67,38 @@ const PatchSchema = z.object({
   knockout_rules: z.array(KnockoutRuleSchema).optional(),
   scoring: ScoringSchema.optional(),
   post_action: PostActionSchema.optional(),
+  ...SkalaFields,
 });
+
+const SETTER_COLUMNS =
+  "id, name, enabled, questions, knockout_rules, scoring, post_action, engine, bot_name, link_agenda, link_demo, call_minutes, garantia_activa, umbral_agenda, umbral_prioritario, seguimientos_max, system_prompt";
+
+function blankToNull(value: string | null | undefined): string | null | undefined {
+  if (value == null) return value;
+  const trimmed = value.trim();
+  return trimmed.length > 0 ? trimmed : null;
+}
+
+function normalizeSetterWrite<T extends { link_agenda?: string | null; link_demo?: string | null; umbral_agenda?: number; umbral_prioritario?: number }>(
+  data: T,
+): { ok: true; data: T } | { ok: false; error: string } {
+  const link_agenda = blankToNull(data.link_agenda);
+  const link_demo = blankToNull(data.link_demo);
+  if (
+    data.umbral_agenda != null &&
+    data.umbral_prioritario != null &&
+    data.umbral_prioritario < data.umbral_agenda
+  ) {
+    return {
+      ok: false,
+      error: "El umbral prioritario debe ser mayor o igual al umbral de agenda",
+    };
+  }
+  return {
+    ok: true,
+    data: { ...data, link_agenda, link_demo },
+  };
+}
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -129,9 +174,7 @@ export async function GET(
   const db = svc();
   const { data, error } = await db
     .from("setter_configs")
-    .select(
-      "id, name, enabled, questions, knockout_rules, scoring, post_action",
-    )
+    .select(SETTER_COLUMNS)
     .eq("workspace_id", workspaceId)
     .order("created_at", { ascending: false })
     .limit(1)
@@ -176,17 +219,19 @@ export async function POST(
       { status: 400 },
     );
   }
+  const normalized = normalizeSetterWrite(parsed.data);
+  if (!normalized.ok) {
+    return NextResponse.json({ error: normalized.error }, { status: 400 });
+  }
 
   const db = svc();
   const { data, error } = await db
     .from("setter_configs")
     .insert({
       workspace_id: workspaceId,
-      ...parsed.data,
+      ...normalized.data,
     })
-    .select(
-      "id, name, enabled, questions, knockout_rules, scoring, post_action",
-    )
+    .select(SETTER_COLUMNS)
     .single();
 
   if (error || !data) {
@@ -228,8 +273,12 @@ export async function PATCH(
       { status: 400 },
     );
   }
+  const normalized = normalizeSetterWrite(parsed.data);
+  if (!normalized.ok) {
+    return NextResponse.json({ error: normalized.error }, { status: 400 });
+  }
 
-  const { id, ...updates } = parsed.data;
+  const { id, ...updates } = normalized.data;
 
   const db = svc();
 
@@ -252,9 +301,7 @@ export async function PATCH(
     .from("setter_configs")
     .update(updates)
     .eq("id", id)
-    .select(
-      "id, name, enabled, questions, knockout_rules, scoring, post_action",
-    )
+    .select(SETTER_COLUMNS)
     .single();
 
   if (error || !data) {
